@@ -45,6 +45,9 @@ run:
 leaks:
 	@lldb ./$(MAIN_TARGET)
 
+macros: $(SRC_OBJS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) -E $(INCL_FLAGS) -o $@ $^
+
 # create the .o and main executable directories as well as the
 #  test binary directory if they don't exist.
 $(BUILD_DIR) $(TEST_BUILD_DIR) $(MAIN_BUILD_DIR) $(OBJ_DIR) $(BIN_DIR) $(TEST_OBJ_DIR) $(TEST_BIN_DIR) $(INCL_DIR):
