@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <iostream>
+#include <exception>
 
 #define _QTestCase(className)                          \
     class className : public qtest::QTestBase {        \
@@ -19,27 +20,60 @@
     };                                                 \
 void className::runTest()
 
-// use two levels of indirection in order to
-// resolve __LINE__ correctly
-#define JOIN(x, y) _QTestCase(x##y)
-#define CONCAT(x,y) JOIN(x,y)
-#define QTEST_NAME(module, testName) CONCAT(module##testName, __LINE__)
 // #define QTestCase(module_, testName) QTEST_NAME(module_, testName)
 #define QTestCase(module_, testName) _QTestCase(QTest_##module_##_##testName)
 
 #define _QTestRegister(className) qtest::QTestRunner::getInstance().registerTest(className::getInstance())
 #define QTestRegister(module_, testName) _QTestRegister(QTest_##module_##_##testName)
+#define QTestRunAll() qtest::QTestRunner::getInstance().runTests()
+
+// use two levels of indirection in order to
+// resolve __LINE__ correctly
+#define JOIN(x, y) x##y
+#define CONCAT(x,y) JOIN(x,y)
+// #define JOIN_SPECIAL(e, m) CONCAT(, __LINE__)
+// assertion macros
+// #define ASSERT_TRUE(exp)        qtest::qtestAssertEquals(exp, #exp, __FILE__, __LINE__)
+#define QTEST_EXPECT_TRUE(exp) qtest::expect(exp, true, #exp, __FILE__, __LINE__)
+#define QTEST_EXPECT_FALSE(exp)  qtest::expect(exp, false, #exp, __FILE__, __LINE__)
+#define QTEST_EXPECT_THROWS(exp, exceptionType) \
+try {\
+    exp;\
+    throw qtest::QTestException(#exp, __FILE__, __LINE__);\
+} catch (exceptionType& e) {}
 
 namespace qtest {
+    class QTestException : public std::exception {
+        public:
+            QTestException(const std::string& _text,
+                           const std::string& _file,
+                           const std::size_t& _lineNumber) {
+                msg = _file + ":" + std::to_string(_lineNumber) +
+                       ": FAILED:\n    " + _text + "\n";
+            }
+            const char* what() const noexcept override {
+                return msg.c_str();
+            }
+        private:
+            std::string msg;
+            // std::string text;
+            // std::string file;
+            // std::size_t lineNumber;
+    };
+
+    void expect(const bool& actual, const bool& expected,
+                const std::string text, const std::string file,
+                std::size_t lineNumber) {
+        if (actual == expected) return;  // ignore
+        throw QTestException(text, file, lineNumber);
+    }
+
     class QTestBase {
         // base class for test cases
         public:
-            explicit QTestBase() : _hasFailed(false) {}
+            explicit QTestBase() {}
             virtual ~QTestBase() = default;
             virtual void runTest() = 0;
-            bool hasFailed() { return _hasFailed; }
-        protected:
-            bool _hasFailed;
     };
 
     class QTestRunner {
@@ -58,24 +92,28 @@ namespace qtest {
             }
 
             void runTests() {
-                std::uint32_t nFail = 0, nTotal = 0;
+                std::uint32_t nPass = 0, nTotal = 0;
                 for (auto& test : qtests) {
-                    test->runTest();
-                    nTotal++;
-
-                    if (test->hasFailed()) {
-                        nFail++;
-                    } else {
-
+                    try {
+                        test->runTest();
+                        nPass++;
+                    } catch (QTestException& e) {
+                        // test failed
+                        std::cerr << e.what();
+                    } catch (std::exception& e) {
+                        // uncaught exception, test marked as failed
+                        std::cerr << "Unexpected exception while running test:\n    "
+                                  << e.what() << "\n";
                     }
+                    nTotal++;
                 }
 
-                if (nFail == 0) {
+                if (nPass == nTotal) {
                     std::cout << "Success: All tests passed ";
                 } else {
                     std::cout << "Failure: Some tests failed ";
                 }
-                std::cout << "[" + std::to_string(nTotal - nFail) + "/" + std::to_string(nTotal) + "]\n";
+                std::cout << "[" + std::to_string(nPass) + "/" + std::to_string(nTotal) + "]\n";
             }
 
         private:
