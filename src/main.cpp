@@ -1,14 +1,14 @@
 #include "../include/qtest.hpp"
 #include <iostream>
+#include <exception>
 
 QTestCase(Add, Positive) {
-    std::cout << "hello\n";
+    // QTEST_ASSERT_FALSE(false == true);
+    QTEST_EXPECT_THROWS(throw std::exception(), qtest::QTestException);
 }
 
 int main(int argc, char const *argv[]) {
-    // qtest::QTestRunner::getInstance().registerTest();
     QTestRegister(Add, Positive);
-    qtest::QTestRunner::getInstance().runTests();
-    std::cout << "haha\n";
+    QTestRunAll();
     return 0;
 }
