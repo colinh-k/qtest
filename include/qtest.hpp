@@ -5,13 +5,13 @@
 #include <exception>
 
 // color macros for output
-#define RED    "\033[31m"
-#define GREEN  "\033[32m"
-#define YELLOW "\033[33m"
+#define RED    "\033[1m\033[31m"
+#define GREEN  "\033[1m\033[32m"
+#define YELLOW "\033[1m\033[33m"
 #define RESET  "\033[0m"
 
 #define QTEST_NAME(module_, testName) QTest_##module_##_##testName
-#define _QTestCase(module_, testName)                                                       \
+#define QTestCase(module_, testName)                                                        \
     class QTEST_NAME(module_, testName) : public qtest::QTestBase {                         \
         public:                                                                             \
             static QTEST_NAME(module_, testName)* getInstance (){                           \
@@ -27,26 +27,41 @@
                                           qtest::QTestBase(_name) {}                        \
     };                                                                                      \
 void QTEST_NAME(module_, testName)::runTest()
-#define QTestCase(module_, testName) _QTestCase(module_, testName)
 
-#define QTestRegister(module_, testName) qtest::QTestRunner::getInstance().registerTest(QTEST_NAME(module_, testName)::getInstance())
+#define QTestRegister(module_, testName)             \
+    qtest::QTestRunner::getInstance().registerTest(  \
+        QTEST_NAME(module_, testName)::getInstance() \
+    )
 #define QTestRunAll() qtest::QTestRunner::getInstance().runTests()
 
-#define QTEST_EXPECT(exp) qtest::Expector::expect(exp, "QTEST_EXPECT(" #exp ")", __FILE__, __LINE__)
-#define QTEST_EXPECT_THROWS(exp, exceptionType) \
-try {\
-    exp;\
-    throw qtest::QTestException(#exp, __FILE__, __LINE__);\
-} catch (exceptionType& e) {}
+#define QTEST_EXPECT(exp)\
+    qtest::Expector::expect(exp, "QTEST_EXPECT(" #exp ")", __FILE__, __LINE__)
+
+// use a do-while statement so a ';' is required at the end
+// (for consistent style)
+#define QTEST_EXPECT_THROWS(exp, exceptionType)              \
+do {                                                         \
+    try {                                                    \
+        exp;                                                 \
+    } catch (exceptionType& e) {                             \
+        break;                                               \
+    }                                                        \
+    throw qtest::QTestException(                             \
+        "Expected exception " #exceptionType " not thrown.", \
+        #exp, __FILE__, __LINE__                             \
+    );                                                       \
+} while (false)
 
 namespace qtest {
     class QTestException : public std::exception {
         public:
-            QTestException(const std::string& _text,
+            QTestException(const std::string& _msg,
+                           const std::string& _text,
                            const std::string& _file,
                            const std::size_t& _lineNumber) {
-                msg = RED "FAILED: " RESET + _file + ":" + std::to_string(_lineNumber) +
-                       ":\n    " + _text + "\n";
+                msg = RED "FAILED: " RESET + _file + ":" +
+                      std::to_string(_lineNumber) +
+                      ": " + _msg + "\n    " + _text + "\n";
             }
             const char* what() const noexcept override {
                 return msg.c_str();
@@ -61,7 +76,8 @@ namespace qtest {
                     const std::string file,
                     std::size_t lineNumber) {
             if (actual) return;  // ignore if true
-            throw QTestException(text, file, lineNumber);
+            throw QTestException("Expected true but was false.",
+                                 text, file, lineNumber);
         }
     };
 
@@ -115,7 +131,8 @@ namespace qtest {
                 failedTests.push_back(test);
             } catch (std::exception& e) {
                 // uncaught exception, test marked as failed
-                std::cerr << RED "FAILED: " RESET " unexpected exception while running test:\n    "
+                std::cerr << RED "FAILED: " RESET \
+                          " unexpected exception while running test:\n    "
                             << e.what() << "\n";
                 failedTests.push_back(test);
             }
@@ -123,11 +140,14 @@ namespace qtest {
         }
 
         if (nPass == nTotal) {
-            std::cout << "\n" GREEN "Success:" RESET " All tests passed ";
+            std::cout << "\n" GREEN "Success:" RESET \
+                      " All tests passed ";
         } else {
-            std::cout << "\n" RED "Failure:" RESET " Some tests failed (listed below) ";
+            std::cout << "\n" RED "Failure:" RESET \
+                      " Some tests failed (listed below) ";
         }
-        std::cout << "[" + std::to_string(nPass) + "/" + std::to_string(nTotal) + "]\n";
+        std::cout << "[" << std::to_string(nPass) << "/"
+                  << std::to_string(nTotal) << "]\n";
         for (QTestBase*& test : failedTests) {
             std::cout << RED "FAILED: " RESET << test->getName() + "\n";
         }
