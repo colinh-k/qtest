@@ -65,7 +65,8 @@ do {                                          \
     if (expected == actual) break;            \
     throw qtest::QTestException(              \
         #actual,                              \
-        "Expected: " #expected                \
+        "Expected: " +                        \
+        std::to_string(expected) +            \
         "\n        Actual:   " +              \
         std::to_string(actual),               \
         __FILE__, __LINE__                    \
